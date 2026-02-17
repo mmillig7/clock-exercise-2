@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bloom Clock</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+
+function hsla(h,s,l,a=1){ return `hsla(${h},${s}%,${l}%,${a})`; }
+
+function drawPetal(ox, oy, angle, len, hue, alpha) {
+  ctx.save();
+  ctx.translate(ox, oy);
+  ctx.rotate(angle);
+  const w = len * 0.5;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(-w * 0.9, -len * 0.25, -w * 0.85, -len * 0.75, 0, -len * 0.98);
+  ctx.bezierCurveTo(w * 0.85, -len * 0.75, w * 0.9, -len * 0.25, 0, 0);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, 0, 0, -len);
+  g.addColorStop(0,   hsla(hue, 35, 45, 0));
+  g.addColorStop(0.3, hsla(hue, 55, 65, alpha));
+  g.addColorStop(1,   hsla(hue, 45, 75, alpha * 0.85));
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawLeaf(x, y, side, size, hue) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(side, 1);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(size*0.9, -size*0.3, size*1.3, -size*1.1, size*0.3, -size*1.6);
+  ctx.bezierCurveTo(-size*0.1, -size*1.1, -size*0.2, -size*0.4, 0, 0);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, 0, size*0.5, -size*1.5);
+  g.addColorStop(0, hsla(hue, 48, 18, 0.95));
+  g.addColorStop(1, hsla(hue+12, 58, 40, 0.7));
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.quadraticCurveTo(size*0.4, -size*0.8, size*0.3, -size*1.6);
+  ctx.strokeStyle = hsla(hue+10, 40, 50, 0.3);
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function draw() {
+  const now = new Date();
+  const h   = now.getHours() % 12;
+  const m   = now.getMinutes();
+  const s   = now.getSeconds();
+  const ms  = now.getMilliseconds();
+
+  const secFrac  = (s + ms/1000) / 60;
+  const minFrac  = (m + secFrac) / 60;
+  const hourFrac = (h + minFrac) / 12;
+  const pulse    = Math.sin(Date.now() / 950) * 0.5 + 0.5;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0a0f0d';
+  ctx.fillRect(0, 0, W, H);
+
+  const groundY  = H + 8;
+  const maxStemH = H * 0.72;
+  const stemH    = 90 + minFrac * (maxStemH - 90);
+  const flowerX  = W / 2;
+  const flowerY  = groundY - stemH;
+  const sway     = Math.sin(Date.now() / 3200) * 7;
+  const ctrlX    = flowerX + sway * 0.45;
+
+  ctx.beginPath();
+  ctx.moveTo(flowerX, groundY);
+  ctx.quadraticCurveTo(ctrlX, groundY - stemH * 0.5, flowerX + sway, flowerY);
+  ctx.strokeStyle = hsla(112, 38, 24, 1);
+  ctx.lineWidth = 4.5;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  const fx = flowerX + sway;
+  const fy = flowerY;
+
+  if (stemH > 130) {
+    const ls = 16 + minFrac * 9;
+    const ly = groundY - stemH * 0.33;
+    const lx = flowerX + sway * 0.2;
+    drawLeaf(lx, ly,  1, ls, 110);
+    drawLeaf(lx, ly, -1, ls * 0.85, 105);
+  }
+  if (stemH > 270) {
+    const ls = 13 + minFrac * 7;
+    const ly = groundY - stemH * 0.60;
+    const lx = flowerX + sway * 0.55;
+    drawLeaf(lx, ly, -1, ls, 113);
+    drawLeaf(lx, ly,  1, ls * 0.75, 108);
+  }
+
+  const bloomScale = 0.25 + hourFrac * 0.75;
+  const petalLen   = (100 + pulse * 8) * bloomScale;
+
+  const N = 6;
+  for (let i = 0; i < N; i++) {
+    const angle    = (i / N) * Math.PI * 2 - Math.PI / 2;
+    const active   = hourFrac >= i / N;
+    const isCurr   = Math.floor(hourFrac * N) === i;
+    const alpha    = active ? (isCurr ? 1 : 0.65) : 0.12;
+    const hue      = 330 + i * 3;
+    drawPetal(fx, fy, angle, petalLen, hue, alpha);
+  }
+
+  const innerLen = petalLen * 0.58;
+  for (let i = 0; i < N; i++) {
+    const angle  = (i / N) * Math.PI * 2 - Math.PI / 2 + (Math.PI / N);
+    const active = minFrac >= i / N;
+    const isCurr = Math.floor(minFrac * N) === i;
+    const alpha  = active ? (isCurr ? 0.95 : 0.6) : 0.1;
+    const hue    = 338 + i * 2;
+    drawPetal(fx, fy, angle, innerLen, hue, alpha);
+  }
+
+  const coreR = 20 + pulse * 3;
+  const disc = ctx.createRadialGradient(fx - 3, fy - 3, 2, fx, fy, coreR);
+  disc.addColorStop(0,   hsla(340, 40, 92, 1));
+  disc.addColorStop(0.5, hsla(335, 35, 78, 1));
+  disc.addColorStop(1,   hsla(330, 45, 62, 1));
+  ctx.beginPath();
+  ctx.arc(fx, fy, coreR, 0, Math.PI * 2);
+  ctx.fillStyle = disc;
+  ctx.fill();
+
+  const secAngle = secFrac * Math.PI * 2 - Math.PI / 2;
+  const orbitR   = coreR + 14;
+  ctx.beginPath();
+  ctx.arc(fx + Math.cos(secAngle) * orbitR, fy + Math.sin(secAngle) * orbitR, 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = hsla(330, 50, 75, 0.95);
+  ctx.fill();
+
+  requestAnimationFrame(draw);
+}
+
+draw();
+  </script>
+</body>
+</html>
